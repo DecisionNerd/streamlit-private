@@ -119,7 +119,7 @@ reasons about:
    **Authenticated non-member** (`is_member` false, read from the token's `org` claim) →
    Request Access (FR-12). **Authenticated member** → continue (FR-11).
 3. Gateway injects `X-User-*` / `X-Organization-Id` headers (personalization only, FR-15) and
-   **reverse-proxies** `/`, `_static/*`, `_stcore/*`, `_media/*`, upgrading WebSockets
+   **reverse-proxies** `/`, `static/*`, `_stcore/*`, `media/*`, upgrading WebSockets
    (FR-16, FR-17) to the unmodified **Streamlit** process (FR-18).
 4. The WebSocket upgrade is itself authorized at the handshake; while it stays open, a browser
    **heartbeat** (~30s, from the ClerkJS shell page) re-verifies the fresh token so a revoked

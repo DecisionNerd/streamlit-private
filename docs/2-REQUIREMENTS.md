@@ -43,7 +43,7 @@ and hosting providers. Requirement IDs are stable and referenced from
 
 | ID | Requirement | Traces to |
 |---|---|---|
-| FR-16 | The gateway shall correctly reverse-proxy Streamlit, including the paths `/`, `_static/*`, `_stcore/*`, and `_media/*`. | Wrap an existing Streamlit app |
+| FR-16 | The gateway shall correctly reverse-proxy Streamlit. In practice it forwards **everything** to the single Streamlit upstream — the SPA shell and bundle (`/`, `static/*`), core endpoints (`_stcore/*`, incl. the `_stcore/stream` WebSocket), and user media (`media/*`). | Wrap an existing Streamlit app |
 | FR-17 | The gateway shall support **WebSocket upgrades** so that Streamlit's interactivity works through the proxy. | Wrap an existing Streamlit app |
 | FR-18 | The proxied app shall support multipage apps, session state, file uploads, downloads, WebSockets, and custom components **without modification**. | Wrap an existing Streamlit app |
 | FR-32 | The gateway shall authorize the WebSocket at the upgrade handshake **and** continuously re-authorize the open connection via a periodic browser heartbeat, closing the socket when the session/membership is revoked or the heartbeat lapses — without disconnecting still-valid users. | Authorize by org membership |

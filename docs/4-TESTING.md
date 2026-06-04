@@ -29,8 +29,8 @@ end-to-end tests prove the gateway and provider integrations actually work.
 | Authorize by org membership / FR-11, FR-12, FR-13 | Given member/non-member/unauthenticated, When request, Then allow / request-access / sign-in respectively. | `tests/gateway/test_authorization.py` |
 | Session validation / FR-14 | Given an invalid/expired session, When request, Then treated as unauthenticated. | `tests/gateway/test_session.py` |
 | Identity headers / FR-15, NFR-4 | Given an allowed member, When proxied, Then `X-User-*`/`X-Organization-Id` injected; spoofed inbound headers are stripped. | `tests/gateway/test_identity_headers.py` |
-| Reverse proxy paths / FR-16 | Given a running Streamlit, When requesting `/`, `_static/*`, `_stcore/*`, `_media/*`, Then proxied correctly. | `tests/gateway/test_proxy.py` |
-| WebSocket upgrade / FR-17, FR-18 | Given a Streamlit session, When the `_stcore` WS upgrades, Then interactivity round-trips through the gateway. | `tests/gateway/test_websocket.py` |
+| Reverse proxy paths / FR-16 | Given a running Streamlit, When requesting `/`, `static/*`, `_stcore/*`, `media/*`, Then proxied correctly. | `tests/gateway/test_proxy_spike.py`, `tests/gateway/test_real_streamlit_spike.py` |
+| WebSocket upgrade / FR-17, FR-18 | Given a Streamlit session, When the `_stcore/stream` WS upgrades, Then it round-trips through the gateway (upgrade + subprotocol negotiated end-to-end). | `tests/gateway/test_real_streamlit_spike.py` |
 | WebSocket re-authorization / FR-32 | Given an open WS, When the user's membership is revoked, Then the socket closes within one heartbeat interval; When the user stays valid, Then the socket is never disconnected; When heartbeats lapse, Then the socket closes fail-closed. | `tests/gateway/test_ws_revalidation.py` |
 | Invite a user / FR-19 | Given an admin, When invite, Then AuthProvider.create_invitation is called; acceptance yields membership. | `tests/workflows/test_invitations.py` |
 | Request & approve access / FR-20, FR-21 | Given a non-member request, When admin approves, Then AuthProvider.add_member is called (reject discards). | `tests/workflows/test_access_requests.py` |
