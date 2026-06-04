@@ -34,3 +34,5 @@ carries inline guidance), then add a row to the log below.
 | [0008](0008-clerk-backend-verification-no-react.md) | Clerk integration: backend verification + hosted sign-in (no React) | Accepted | 2026-06-04 |
 | [0009](0009-access-requests-no-datastore.md) | Access requests without a gateway datastore | Accepted | 2026-06-04 |
 | [0010](0010-websocket-session-revalidation.md) | WebSocket session re-validation (handshake + heartbeat) | Accepted | 2026-06-04 |
+| [0011](0011-single-container-network-isolation.md) | Single-container deployment for network isolation | Accepted | 2026-06-04 |
+| [0012](0012-python-version-policy.md) | Python version policy: CLI vs. generated assets | Accepted | 2026-06-04 |

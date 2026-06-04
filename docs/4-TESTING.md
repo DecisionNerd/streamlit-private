@@ -63,11 +63,12 @@ uv run pytest
 
 ## Continuous integration
 
-CI runs the unit and integration suites on every push and pull request; the **app-preservation
-hash check** and **provider contract suites** are required gates before merge. End-to-end
-tests against provider sandboxes run on a schedule or pre-release rather than per-commit to
-avoid flakiness from external services. _(CI config to be added with the first implementation
-slice.)_
+CI (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request: a `ruff`
+lint + format check, and the test suite across Python 3.11–3.13 (the CLI's supported range,
+per [ADR-0012](2-ENGINEERING/ADRs/0012-python-version-policy.md)). The **app-preservation hash
+check** and **provider contract suites** are required gates before merge. End-to-end tests
+(`-m e2e`) against provider sandboxes are excluded from per-commit CI and run on a schedule or
+pre-release to avoid flakiness from external services.
 
 ## Test data & environments
 
