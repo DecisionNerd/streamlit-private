@@ -21,14 +21,19 @@ Findings:
    fetches JWKS from Clerk once and caches it.
 2. **There is no handshake in the Python SDK.** `AuthStatus` is only `SIGNED_IN` /
    `SIGNED_OUT` — there is **no `HANDSHAKE` state or redirect logic** like Clerk's Node SDK /
-   middleware. The Python backend can *verify* a session token but cannot *mint or refresh*
-   one.
+   middleware. `authenticate_request` only *verifies*. _(Nuance confirmed in the M2 spike: the
+   SDK **can** mint/refresh sessions server-side via the Backend API — `sessions.refresh`,
+   `sign_in_tokens.create` — but the interactive browser handshake that sets/refreshes the
+   `__session` **cookie** still runs client-side. So the cookie handshake, not all
+   minting, is what the backend can't do.)_
 3. **Clerk session tokens are short-lived (~60s)** and are refreshed client-side by ClerkJS
-   using the long-lived client session. So a token-minting/refreshing component must exist
-   somewhere — it is not the Python backend's job.
+   using the long-lived client session. So the cookie-refresh component must exist
+   client-side — it is not the Python backend's job.
 4. **Org membership is in the token.** For v2 tokens the SDK enriches the payload with
    `org_id`, `org_slug`, `org_role`, and `org_permissions`, so a membership check can be made
-   **networklessly from claims**.
+   **networklessly from claims**. _(M2 spike, against SDK v5.0.7: `org_role` is the **raw**
+   role, e.g. `admin`, **not** `org:`-prefixed — ground truth corrected an over-eager research
+   claim.)_
 5. **Every `AuthProvider` capability maps to a real SDK resource:** `OrganizationInvitations`
    (`create`, `list_pending`, `revoke`), `OrganizationMemberships` (`list`, `create`,
    `delete`), `Users`, `Sessions`, `SignInTokens`. The interface in

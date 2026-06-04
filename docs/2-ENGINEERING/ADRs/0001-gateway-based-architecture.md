@@ -27,7 +27,7 @@ Adopt a **gateway-based architecture**. A dedicated auth gateway, built on **Fas
 Starlette** (async, WebSocket-capable), sits in front of the Streamlit process and owns
 authentication, session validation, the org-membership access decision, and the
 sign-in / request-access / approval surfaces. It reverse-proxies allowed requests — including
-`/`, `_static/*`, `_stcore/*`, `_media/*`, and WebSocket upgrades — to Streamlit unchanged.
+`/`, `static/*`, `_stcore/*`, `media/*`, and WebSocket upgrades — to Streamlit unchanged.
 The gateway may inject `X-User-*` / `X-Organization-Id` headers for **personalization only**;
 the app never makes security decisions.
 
