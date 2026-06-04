@@ -79,3 +79,25 @@ the verified Clerk token on each handshake/heartbeat, never the cookie id itself
 - **Composes with ADR-0008:** the heartbeat lives in the same ClerkJS shell page that handles
   sign-in, so no new client framework is introduced and the "no React" guarantee holds.
 - Resolves issue #18 and refines how FR-14 applies to the long-lived WebSocket (FR-17).
+
+## Implementation note (2026-06-04, Milestone 3)
+
+A design panel reviewing the implementation caught a **fail-open bug** in the naive eviction
+approach, now fixed and recorded so it isn't reintroduced:
+
+- **Eviction must cancel the bridge tasks, not call `ws.close()` out of band.** The proxy
+  bridges the socket with two relay coroutines parked in `await client_ws.receive()` and
+  `async for upstream_ws`. Closing the *client* socket from the sweeper does **not** unblock
+  those awaits, so the **upstream Streamlit socket would linger** — a revoked user stays
+  connected to the app. The fix: the registry's per-connection `evict` callback **cancels both
+  relay tasks**; each relay's `finally` then closes its leg (client and upstream). Proven by a
+  real-socket integration test (`test_eviction_integration.py`) that asserts *both* legs close
+  — a no-op fake socket would have hidden the bug.
+- **Registry stores zero PII/credentials** — only the opaque `__sp_session` id, socket handles,
+  and monotonic timestamps; authorization is always re-derived from the fresh token.
+- **Monotonic clock**, injectable, so eviction is unit-tested deterministically (no real
+  sleeps) and is immune to wall-clock/NTP steps.
+- Defaults: 30s heartbeat, 75s grace (≈2.5 missed beats), 5s sweeper tick. The `__sp_session`
+  cookie is HMAC-signed (`SP_SESSION_SECRET`); the heartbeat is `POST /_sp/heartbeat`.
+- Implemented in `gateway/ws_revalidation.py` + `gateway/proxy.py`; see
+  [`../spike-findings.md`](../spike-findings.md).

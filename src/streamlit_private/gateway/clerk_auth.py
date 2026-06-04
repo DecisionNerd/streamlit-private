@@ -38,6 +38,7 @@ class Identity:
     headers (FR-15). Never trusted by the app for access decisions."""
 
     user_id: str | None
+    email: str | None
     org_id: str | None
     org_role: str | None
     org_slug: str | None
@@ -94,7 +95,7 @@ class ClerkVerifier:
         state = sdk.authenticate_request(request, self._options())
 
         if not state.is_signed_in:
-            return Decision(Access.SIGN_IN, Identity(None, None, None, None))
+            return Decision(Access.SIGN_IN, Identity(None, None, None, None, None))
 
         identity = _identity_from_payload(state.payload or {})
         if self._is_member(identity):
@@ -121,6 +122,9 @@ def _identity_from_payload(payload: dict) -> Identity:
     # back to the compact "o" claim only if enrichment is absent.
     return Identity(
         user_id=payload.get("sub"),
+        # Email may be present as a custom claim; absent by default in Clerk
+        # session tokens (the gateway works fine without it — it's personalization).
+        email=payload.get("email"),
         org_id=payload.get("org_id") or org.get("id"),
         org_role=payload.get("org_role") or org.get("rol"),
         org_slug=payload.get("org_slug") or org.get("slg"),

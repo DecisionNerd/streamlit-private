@@ -65,3 +65,48 @@ Verified facts (against installed SDK v5.0.7):
 - **Path prefixes**: `3-ARCHITECTURE.md` / `2-REQUIREMENTS.md` referenced
   `_static/*` and `_media/*`; the correct current spelling is `static/*` (root
   mount) and `media/*`, with `_stcore/*` for core endpoints.
+
+## Milestone 3 — production gateway wiring (#9, #10)
+
+The spikes became the real gateway: `gateway/auth_gateway.py` (the access
+decision: hosted-sign-in redirect, request-access, identity-header
+inject/strip) and `gateway/ws_revalidation.py` + the rewritten `gateway/proxy.py`
+(heartbeat, connection registry, sweeper, cookie seam). A **design panel** chose
+the re-validation architecture and caught a bug worth recording:
+
+- **Fail-open eviction bug (caught before shipping).** The naive plan closed the
+  client socket from the sweeper. But the bridge relays are parked in awaits a
+  foreign close can't unblock, so the **upstream Streamlit socket would linger** —
+  a revoked user stays connected. Fix: eviction **cancels the bridge tasks**, and
+  each relay's `finally` closes its leg. A no-op fake-socket test would have
+  hidden this; `test_eviction_integration.py` asserts **both** legs close against
+  a real echo upstream. Recorded in ADR-0010's implementation note.
+- **49 tests pass** (40 fast unit + 9 integration). The FR-32 registry/sweeper
+  tests are fully deterministic via an injectable `FakeClock` (no real sleeps).
+
+### Adversarial security review (5 confirmed bugs, all fixed)
+
+A second workflow ran skeptics hunting authz-bypass / fail-open bugs in the
+gateway, then verified each against the code. Five were confirmed and fixed:
+
+- **CRITICAL — spoofed identity headers leaked upstream.** `_strip/_inject` rebound
+  `scope["headers"]` to a *new* list, but Starlette caches `request.headers` from
+  the original list (already accessed by the Clerk verifier), so `http_proxy`
+  forwarded the *spoofed* `X-User-*`. The unit test missed it by asserting on the
+  scope, not the forwarded view. Fix: mutate the header list **in place** (slice
+  assignment / append). Test strengthened to assert via `request.headers`.
+- **HIGH — every authenticated WebSocket upgrade would 500.** `Request(ws.scope)`
+  asserts scope type `"http"`; a WS scope is `"websocket"`, so handshake authz
+  crashed uncaught and never ran. Fix: use `HTTPConnection` (accepts both). New
+  regression test exercises the authed WS handshake.
+- **MEDIUM/LOW — cookieless WS upgrade registered under an un-PUSH-evictable
+  `anon:` key**, downgrading revocation from ~30s to ~75s. Fix: require a
+  verifiable `__sp_session` at the upgrade; refuse (close 1008) otherwise.
+- **LOW (×2) — `__sp_session` not bound to the verified identity**: a party who
+  *already holds* a victim's cookie (HttpOnly+Secure+SameSite=Lax — i.e. a
+  session-hijack precondition, not a remote bypass) could force-evict or
+  lapse-suppress that session. Tracked as a hardening follow-up: derive/compare
+  the correlation id from the verified subject. Defense-in-depth, not a bypass.
+
+One candidate was correctly **refuted** (the sticky `revoked` flag cleared on
+deregister does not create a fail-open).
