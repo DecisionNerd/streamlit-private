@@ -158,6 +158,8 @@ reasons about:
 - [ADR-0008 — Clerk integration: backend verification + hosted sign-in (no React)](2-ENGINEERING/ADRs/0008-clerk-backend-verification-no-react.md)
 - [ADR-0009 — Access requests without a gateway datastore](2-ENGINEERING/ADRs/0009-access-requests-no-datastore.md)
 - [ADR-0010 — WebSocket session re-validation (handshake + heartbeat)](2-ENGINEERING/ADRs/0010-websocket-session-revalidation.md)
+- [ADR-0011 — Single-container deployment for network isolation](2-ENGINEERING/ADRs/0011-single-container-network-isolation.md)
+- [ADR-0012 — Python version policy: CLI vs. generated assets](2-ENGINEERING/ADRs/0012-python-version-policy.md)
 
 ## Risks & trade-offs
 
