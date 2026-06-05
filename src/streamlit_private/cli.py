@@ -18,6 +18,14 @@ from . import __version__
 AUTH_PROVIDERS = ("clerk",)
 HOSTING_PROVIDERS = ("railway",)
 
+# Runtime env the gateway container requires at boot (must be set on the host
+# before deploy). Kept in sync with the generated `.env.example`
+# (templates.env_example). PUBLIC_URL is derived from the assigned domain, so it
+# is not required up front. CLERK_REQUIRED_ORG_ID / SP_APP / CLERK_SECRET_KEY are
+# optional and forwarded when present.
+REQUIRED_DEPLOY_ENV = ("SP_SESSION_SECRET", "CLERK_JWT_KEY", "CLERK_SIGN_IN_URL")
+OPTIONAL_DEPLOY_ENV = ("CLERK_REQUIRED_ORG_ID", "SP_APP", "CLERK_SECRET_KEY")
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -60,6 +68,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Directory to initialize (default: current directory).",
     )
     init.set_defaults(func=cmd_init)
+
+    deploy = sub.add_parser(
+        "deploy",
+        help="Deploy the gateway-fronted app to its host and print the private URL.",
+        description=(
+            "Read the manifest, ship the single-container image to the managed host, "
+            "set the runtime env, assign a domain, and return the private URL (FR-8)."
+        ),
+    )
+    deploy.add_argument(
+        "hosting",
+        nargs="?",
+        choices=HOSTING_PROVIDERS,
+        default=None,
+        help="Hosting provider. Defaults to the manifest's hosting.provider.",
+    )
+    deploy.add_argument(
+        "--path", default=".", help="Project directory (default: current directory)."
+    )
+    deploy.add_argument(
+        "--project",
+        default=None,
+        help="Host project name (default: derived from the directory name).",
+    )
+    deploy.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the confirmation prompt (non-interactive / CI).",
+    )
+    deploy.set_defaults(func=cmd_deploy)
     return parser
 
 
@@ -103,6 +141,127 @@ def cmd_init(args: argparse.Namespace) -> int:
         f"{args.hosting}`."
     )
     return 0
+
+
+def cmd_deploy(args: argparse.Namespace) -> int:
+    """Run `deploy`: read the manifest and ship the app to its host (FR-8/FR-9)."""
+    # Lazy imports keep the --version/--help path light and free of provider code.
+    from pathlib import Path
+
+    from .detection import is_initialized
+    from .hosting import DeployConfig, HostingError, get_provider
+    from .manifest import MANIFEST_NAME, ManifestError, load
+
+    root = Path(args.path).resolve()
+    if not root.is_dir():
+        print(f"Not a directory: {root}", file=sys.stderr)
+        return 1
+    if not is_initialized(root):
+        print(
+            f"No {MANIFEST_NAME} found. Run `streamlit-private init` first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        manifest = load((root / MANIFEST_NAME).read_text(encoding="utf-8"))
+    except (OSError, ManifestError) as exc:
+        print(f"Could not read manifest: {exc}", file=sys.stderr)
+        return 1
+
+    hosting = args.hosting or manifest.hosting_provider
+    if args.hosting and args.hosting != manifest.hosting_provider:
+        print(
+            f"Manifest hosting is {manifest.hosting_provider!r}, not {args.hosting!r}. "
+            "Re-run `init --force` to switch providers.",
+            file=sys.stderr,
+        )
+        return 1
+
+    # Assemble + validate the runtime env, failing before any host side effect.
+    env, missing = _collect_deploy_env(root)
+    if missing:
+        print(
+            "Missing required environment variables: "
+            + ", ".join(missing)
+            + "\nSet them (see .env.example) before deploying.",
+            file=sys.stderr,
+        )
+        return 1
+
+    provider = get_provider(hosting)
+    try:
+        provider.preflight()
+    except HostingError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    project = args.project or root.name
+    if not args.yes and not _confirm(f"Deploy {root.name!r} to {hosting} as {project!r}?"):
+        print("Aborted.")
+        return 1
+
+    config = DeployConfig(repo_root=root, project_name=project, env=env)
+    try:
+        result = provider.deploy(config)
+    except HostingError as exc:
+        print(f"Deploy failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"\nDeployed. Private URL: {result.url}")
+    for warning in result.warnings:
+        print(f"  note: {warning}")
+    print(
+        "\nAccess model: unauthenticated visitors are sent to Sign In; authenticated "
+        "non-members can Request Access; organization members are let straight through.\n"
+        "(The URL may take a minute to go live while the image builds.)"
+    )
+    return 0
+
+
+def _collect_deploy_env(root) -> tuple[dict[str, str], list[str]]:
+    """Gather the runtime env from os.environ + an optional local .env file.
+
+    Returns (env, missing_required_keys). Never guesses secret values (deploy
+    SKILL.md guardrail) — a missing required key is reported, not invented.
+    """
+    import os
+
+    values = _read_dotenv(root / ".env")
+    values.update({k: v for k, v in os.environ.items()})  # real env wins over .env
+
+    env: dict[str, str] = {}
+    for key in (*REQUIRED_DEPLOY_ENV, *OPTIONAL_DEPLOY_ENV):
+        val = values.get(key, "").strip()
+        if val:
+            env[key] = val
+    missing = [k for k in REQUIRED_DEPLOY_ENV if k not in env]
+    return env, missing
+
+
+def _read_dotenv(path) -> dict[str, str]:
+    """Minimal KEY=VALUE parser for a local .env (no dependency on python-dotenv)."""
+    out: dict[str, str] = {}
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return out
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        out[key.strip()] = value.strip().strip("'\"")
+    return out
+
+
+def _confirm(prompt: str) -> bool:
+    """Ask for confirmation on a TTY; treat non-interactive as 'no' (require --yes)."""
+    if not sys.stdin.isatty():
+        print(f"{prompt} (refusing in non-interactive mode; pass --yes)", file=sys.stderr)
+        return False
+    answer = input(f"{prompt} [y/N] ").strip().lower()
+    return answer in ("y", "yes")
 
 
 def main(argv: list[str] | None = None) -> int:

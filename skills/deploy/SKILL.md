@@ -15,6 +15,13 @@ running the `streamlit-private` CLI, then report the private URL.
 
 If the repo is not yet initialized, run the `streamlit-private-init` skill first.
 
+## Prerequisites
+
+- For **Railway**, the [`railway` CLI](https://docs.railway.com/guides/cli) must be installed
+  and authenticated (`railway login`, or a `RAILWAY_TOKEN` environment variable for
+  headless/CI use). `deploy` checks this first and prints guidance if it's missing — surface
+  that to the user rather than working around it.
+
 ## Hard rules
 
 - **Read providers from the manifest.** The hosting provider is recorded in
