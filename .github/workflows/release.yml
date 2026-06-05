@@ -1,0 +1,51 @@
+name: Release
+
+# Publish to PyPI via Trusted Publishing (OIDC) when a version tag is pushed.
+# No PyPI API token is stored: the publish job mints a short-lived OIDC token
+# that PyPI exchanges for a one-time upload credential (ADR-0007). The PyPI-side
+# "pending publisher" must be registered first — see docs/2-ENGINEERING/release.md.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions: {} # deny-all at workflow scope; grant least-privilege per job.
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Build distributions
+        # uv invokes hatchling to produce dist/*.tar.gz + dist/*.whl.
+        # --no-sources so the build doesn't rely on tool.uv.sources.
+        run: uv build --no-sources
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI (Trusted Publishing)
+    needs: build
+    runs-on: ubuntu-latest
+    # The Trusted Publisher on PyPI is scoped to this environment name (pypi);
+    # attach required-reviewer protection here for a manual release gate.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/streamlit-private
+    permissions:
+      id-token: write # mandatory: lets the job mint the OIDC token for PyPI.
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        # No credentials: id-token: write + no token triggers Trusted Publishing.
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -35,4 +35,5 @@ docgen add adr <short-slug>
 |---|---|
 | [skills.md](skills.md) | The Agent Skills shipped with the project and how agents install/use them. |
 | [spike-findings.md](spike-findings.md) | Results of the Milestone 2 de-risking spikes (proxy + Clerk auth). |
+| [release.md](release.md) | How to publish to PyPI (Trusted Publishing) — one-time setup + cutting a release. |
 | [ADRs/](ADRs/) | Architecture Decision Records and their decision log. |

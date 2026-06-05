@@ -41,3 +41,7 @@ workflow using PyPI Trusted Publishing (OIDC, no long-lived token).
   contributors and for testing `init`/`deploy` before a release).
 - Implementation tracked in the packaging and release issues; the entry point already resolves
   (`uvx --from . streamlit-private --version`).
+- **Built (Milestone 7):** the release workflow is `.github/workflows/release.yml` — builds
+  with `uv build` and publishes via Trusted Publishing on a `v*` tag, scoped to a `pypi`
+  GitHub Environment. The maintainer's one-time PyPI pending-publisher registration and the
+  tag-to-release steps are documented in [`../release.md`](../release.md).
