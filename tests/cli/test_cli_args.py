@@ -54,3 +54,43 @@ def test_deploy_args() -> None:
 def test_deploy_unknown_provider_rejected() -> None:
     with pytest.raises(SystemExit):
         build_parser().parse_args(["deploy", "heroku"])
+
+
+def test_invite_args() -> None:
+    args = build_parser().parse_args(
+        ["invite", "a@example.com", "--role", "org:admin", "--path", "/tmp/x", "--yes"]
+    )
+    assert args.command == "invite"
+    assert args.email == "a@example.com"
+    assert args.role == "org:admin"
+    assert args.yes is True
+
+
+def test_invite_defaults() -> None:
+    args = build_parser().parse_args(["invite", "a@example.com"])
+    assert args.role == "org:member"
+    assert args.path == "."
+    assert args.yes is False
+
+
+def test_invite_requires_email() -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["invite"])
+
+
+def test_access_requests_subactions() -> None:
+    assert build_parser().parse_args(["access-requests", "list"]).action == "list"
+    ap = build_parser().parse_args(["access-requests", "approve", "user_1", "--yes"])
+    assert ap.action == "approve" and ap.request == "user_1"
+    rj = build_parser().parse_args(["access-requests", "reject", "user_1"])
+    assert rj.action == "reject" and rj.request == "user_1"
+
+
+def test_access_requests_action_required() -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["access-requests"])
+
+
+def test_access_requests_approve_requires_id() -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["access-requests", "approve"])

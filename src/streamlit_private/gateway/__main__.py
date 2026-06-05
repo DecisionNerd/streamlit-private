@@ -55,6 +55,9 @@ def build_app(secret: bytes):
     """Build the gateway ASGI app from the environment. Separated for testability."""
     public_url = os.environ.get("PUBLIC_URL")
     required_org = os.environ.get("CLERK_REQUIRED_ORG_ID") or None
+    # Backend secret: enables self-service Request Access recording (FR-20). When
+    # absent, the Request-Access page still renders but the button is inert.
+    clerk_secret_key = os.environ.get("CLERK_SECRET_KEY") or None
 
     verifier = ClerkVerifier(
         jwt_key=_require("CLERK_JWT_KEY"),
@@ -73,6 +76,8 @@ def build_app(secret: bytes):
         registry=registry,
         verifier=verifier,
         secret=secret,
+        clerk_secret_key=clerk_secret_key,
+        org_id=required_org,
     )
 
 

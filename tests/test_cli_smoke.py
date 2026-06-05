@@ -42,7 +42,8 @@ def test_cli_import_does_not_pull_in_gateway_runtime() -> None:
         "import sys, streamlit_private.cli as c; "
         "c.build_parser(); "
         "assert 'uvicorn' not in sys.modules, 'uvicorn imported by CLI'; "
-        "assert 'starlette' not in sys.modules, 'starlette imported by CLI'"
+        "assert 'starlette' not in sys.modules, 'starlette imported by CLI'; "
+        "assert 'clerk_backend_api' not in sys.modules, 'clerk SDK imported by CLI'"
     )
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr

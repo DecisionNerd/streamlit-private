@@ -75,6 +75,8 @@ def build_gateway(
     verifier: ClerkVerifier | None = None,
     secret: bytes | None = None,
     clock: Clock | None = None,
+    clerk_secret_key: str | None = None,
+    org_id: str | None = None,
 ) -> Starlette:
     """Build the Starlette reverse-proxy app.
 
@@ -85,8 +87,12 @@ def build_gateway(
     Supplying ``registry`` (with ``verifier`` and ``secret``) enables FR-32
     re-validation: the heartbeat route, the ``__sp_session`` cookie seam, socket
     registration, and the lapse sweeper. ``clock`` defaults to ``RealClock``.
+
+    Supplying ``clerk_secret_key`` + ``org_id`` (with a ``verifier``) enables the
+    ``/_sp/request-access`` route (FR-20) that records a non-member's request.
     """
     revalidation_enabled = registry is not None and verifier is not None and secret is not None
+    request_access_enabled = bool(verifier and clerk_secret_key and org_id)
     clock = clock or RealClock()
 
     async def http_proxy(request: Request) -> Response:
@@ -197,6 +203,12 @@ def build_gateway(
         # Reserved /_sp/ prefix, handled by the gateway before the catch-all and
         # never forwarded to Streamlit.
         routes.append(make_heartbeat_route(registry, verifier, secret))
+    if request_access_enabled:
+        from .request_access import make_request_access_route
+
+        routes.append(
+            make_request_access_route(verifier, secret_key=clerk_secret_key, org_id=org_id)
+        )
     routes.append(
         Route(
             "/{path:path}",
