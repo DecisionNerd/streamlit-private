@@ -31,6 +31,12 @@ gateway = [
     "websockets>=13",
     "clerk-backend-api>=5,<6",
 ]
+# Admin workflows (invite, access-requests) call the Clerk Backend API locally.
+# Kept out of the lean CLI (dependencies = []); installed via
+# `pip install streamlit-private[admin]` or `uvx --with 'streamlit-private[admin]'`.
+admin = [
+    "clerk-backend-api>=5,<6",
+]
 
 [project.urls]
 Homepage = "https://github.com/DecisionNerd/streamlit-private"

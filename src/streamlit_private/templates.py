@@ -99,7 +99,9 @@ CLERK_JWT_KEY=
 CLERK_SIGN_IN_URL=
 # Organization whose membership grants access. Leave blank to allow any signed-in user.
 CLERK_REQUIRED_ORG_ID=
-# Clerk Backend API secret key (used by invite / access-request commands).
+# Clerk Backend API secret key. Used by the invite / access-request CLI commands,
+# and by the gateway to record self-service access requests. Set it on the host to
+# enable the Request Access button; without it the page renders but the button is inert.
 CLERK_SECRET_KEY=
 """
 

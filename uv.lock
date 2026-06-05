@@ -1376,6 +1376,9 @@ version = "0.1.0"
 source = { editable = "." }
 
 [package.optional-dependencies]
+admin = [
+    { name = "clerk-backend-api" },
+]
 gateway = [
     { name = "clerk-backend-api" },
     { name = "httpx" },
@@ -1396,13 +1399,14 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "clerk-backend-api", marker = "extra == 'admin'", specifier = ">=5,<6" },
     { name = "clerk-backend-api", marker = "extra == 'gateway'", specifier = ">=5,<6" },
     { name = "httpx", marker = "extra == 'gateway'", specifier = ">=0.27" },
     { name = "starlette", marker = "extra == 'gateway'", specifier = ">=0.40" },
     { name = "uvicorn", marker = "extra == 'gateway'", specifier = ">=0.30" },
     { name = "websockets", marker = "extra == 'gateway'", specifier = ">=13" },
 ]
-provides-extras = ["gateway"]
+provides-extras = ["gateway", "admin"]
 
 [package.metadata.requires-dev]
 dev = [

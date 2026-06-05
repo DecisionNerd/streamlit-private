@@ -98,6 +98,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="Skip the confirmation prompt (non-interactive / CI).",
     )
     deploy.set_defaults(func=cmd_deploy)
+
+    invite = sub.add_parser(
+        "invite",
+        help="Invite a user to the app's organization (FR-19).",
+        description="Send an organization invitation; on acceptance the user becomes a member.",
+    )
+    invite.add_argument("email", help="Email address to invite.")
+    invite.add_argument(
+        "--role", default="org:member", help="Org role key to grant (default: org:member)."
+    )
+    invite.add_argument("--path", default=".", help="Project directory (default: current).")
+    invite.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
+    invite.set_defaults(func=cmd_invite)
+
+    ar = sub.add_parser(
+        "access-requests",
+        help="List, approve, or reject pending access requests (FR-20/FR-21).",
+        description="Manage self-service access requests from authenticated non-members.",
+    )
+    ar.add_argument("--path", default=".", help="Project directory (default: current).")
+    ar_sub = ar.add_subparsers(dest="action", required=True)
+    ar_sub.add_parser("list", help="List pending access requests.")
+    ap = ar_sub.add_parser("approve", help="Approve a request (adds the user to the org).")
+    ap.add_argument("request", help="The request to approve (user id, or email).")
+    ap.add_argument("--role", default="org:member", help="Org role key (default: org:member).")
+    ap.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
+    rj = ar_sub.add_parser("reject", help="Reject (discard) a request.")
+    rj.add_argument("request", help="The request to reject (user id, or email).")
+    rj.add_argument("--yes", action="store_true", help="Skip the confirmation prompt.")
+    ar.set_defaults(func=cmd_access_requests)
     return parser
 
 
@@ -262,6 +292,146 @@ def _confirm(prompt: str) -> bool:
         return False
     answer = input(f"{prompt} [y/N] ").strip().lower()
     return answer in ("y", "yes")
+
+
+def _load_manifest_or_exit(root, *, action: str) -> tuple[object | None, int]:
+    """Shared preamble for admin commands: require an initialized, readable repo."""
+    from .detection import is_initialized
+    from .manifest import MANIFEST_NAME, ManifestError, load
+
+    if not root.is_dir():
+        print(f"Not a directory: {root}", file=sys.stderr)
+        return None, 1
+    if not is_initialized(root):
+        print(f"No {MANIFEST_NAME} found. Run `streamlit-private init` first.", file=sys.stderr)
+        return None, 1
+    try:
+        return load((root / MANIFEST_NAME).read_text(encoding="utf-8")), 0
+    except (OSError, ManifestError) as exc:
+        print(f"Could not read manifest: {exc}", file=sys.stderr)
+        return None, 1
+
+
+def _collect_auth_config(root) -> tuple[str, str, list[str]]:
+    """Gather (secret, org_id, missing) from os.environ + an optional local .env.
+
+    Admin workflows act on the operator's behalf: holding CLERK_SECRET_KEY is the
+    operator's authority. Never guesses values — a missing key is reported.
+    """
+    import os
+
+    values = _read_dotenv(root / ".env")
+    values.update({k: v for k, v in os.environ.items()})  # real env wins over .env
+    secret = values.get("CLERK_SECRET_KEY", "").strip()
+    org_id = values.get("CLERK_REQUIRED_ORG_ID", "").strip()
+    missing = [
+        name
+        for name, val in (("CLERK_SECRET_KEY", secret), ("CLERK_REQUIRED_ORG_ID", org_id))
+        if not val
+    ]
+    return secret, org_id, missing
+
+
+def _admin_provider(root, manifest, *, default_role: str = "org:member"):
+    """Resolve+preflight the auth provider for an admin command, or print+exit.
+
+    Returns (provider, None) on success or (None, exit_code) on failure.
+    """
+    from . import auth
+
+    secret, org_id, missing = _collect_auth_config(root)
+    if missing:
+        print(
+            "Missing required environment variables: "
+            + ", ".join(missing)
+            + "\nSet them (see .env.example) before running admin workflows.",
+            file=sys.stderr,
+        )
+        return None, 1
+    provider = auth.get_provider(
+        manifest.auth_provider, secret_key=secret, org_id=org_id, default_role=default_role
+    )
+    try:
+        provider.preflight()
+    except auth.AuthError as exc:
+        print(str(exc), file=sys.stderr)
+        return None, 1
+    return provider, None
+
+
+def cmd_invite(args: argparse.Namespace) -> int:
+    """Run `invite`: send an org invitation (FR-19)."""
+    from pathlib import Path
+
+    from . import auth
+
+    root = Path(args.path).resolve()
+    manifest, code = _load_manifest_or_exit(root, action="invite")
+    if manifest is None:
+        return code
+    provider, code = _admin_provider(root, manifest, default_role=args.role)
+    if provider is None:
+        return code
+
+    if not args.yes and not _confirm(f"Invite {args.email!r} as {args.role}?"):
+        print("Aborted.")
+        return 1
+    try:
+        provider.create_invitation(args.email, role=args.role)
+    except auth.AuthError as exc:
+        print(f"Invite failed: {exc}", file=sys.stderr)
+        return 1
+    print(f"Invited {args.email}. Once they accept, they become a member and gain access.")
+    return 0
+
+
+def cmd_access_requests(args: argparse.Namespace) -> int:
+    """Run `access-requests {list,approve,reject}` (FR-20/FR-21)."""
+    from pathlib import Path
+
+    from . import auth
+
+    root = Path(args.path).resolve()
+    manifest, code = _load_manifest_or_exit(root, action="access-requests")
+    if manifest is None:
+        return code
+    role = getattr(args, "role", "org:member")
+    provider, code = _admin_provider(root, manifest, default_role=role)
+    if provider is None:
+        return code
+
+    try:
+        if args.action == "list":
+            reqs = provider.list_access_requests()
+            if not reqs:
+                print("No pending access requests.")
+                return 0
+            print(f"{'EMAIL':<32} {'USER ID':<24} REQUESTED AT")
+            for r in reqs:
+                print(f"{(r.email or '-'):<32} {r.user_id:<24} {r.requested_at}")
+            return 0
+
+        if args.action == "approve":
+            if not args.yes and not _confirm(f"Approve {args.request!r} (adds them to the org)?"):
+                print("Aborted.")
+                return 1
+            provider.approve_access_request(args.request, role=role)
+            print("Approved; user added to the organization.")
+            return 0
+
+        if args.action == "reject":
+            if not args.yes and not _confirm(f"Reject {args.request!r}?"):
+                print("Aborted.")
+                return 1
+            provider.reject_access_request(args.request)
+            print("Rejected; request discarded.")
+            return 0
+    except auth.AuthError as exc:
+        print(f"Operation failed: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Unknown action: {args.action}", file=sys.stderr)
+    return 1
 
 
 def main(argv: list[str] | None = None) -> int:
