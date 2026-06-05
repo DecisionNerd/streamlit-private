@@ -66,9 +66,14 @@ uv run pytest
 CI (`.github/workflows/ci.yml`) runs on every push to `main` and every pull request: a `ruff`
 lint + format check, and the test suite across Python 3.11–3.13 (the CLI's supported range,
 per [ADR-0012](2-ENGINEERING/ADRs/0012-python-version-policy.md)). The **app-preservation hash
-check** and **provider contract suites** are required gates before merge. End-to-end tests
-(`-m e2e`) against provider sandboxes are excluded from per-commit CI and run on a schedule or
-pre-release to avoid flakiness from external services.
+check**, the **provider contract suites** (auth + hosting), and the **skills CI checks**
+(discovery / CLI-parity / guarantees / agent-agnostic, in `tests/skills/`) are required gates
+before merge. End-to-end tests (`-m e2e`) against provider sandboxes are excluded from
+per-commit CI and run on a schedule or pre-release to avoid flakiness from external services.
+
+Releases publish to PyPI via a separate workflow (`.github/workflows/release.yml`) triggered on
+a version tag, using **Trusted Publishing** (OIDC — no stored token); see
+[ADR-0007](2-ENGINEERING/ADRs/0007-distribute-cli-via-pypi.md).
 
 ## Test data & environments
 
